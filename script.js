@@ -1,19 +1,44 @@
 // script.js
+// Import the functions you need from the SDKs
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js";
+import { getDatabase, ref, get, set, onValue, update } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js";
+
+// Your web app's Firebase configuration (replace with your own)
+const firebaseConfig = {
+    apiKey: "AIzaSyCPfKT6_z0t-ZDz_FyAqboC7Ma289sbAVI",
+    authDomain: "elib-47930.firebaseapp.com",
+    projectId: "elib-47930",
+    storageBucket: "elib-47930.appspot.com",
+    messagingSenderId: "818714954437",
+    appId: "1:818714954437:web:7d1dc2a7f5088bfb7d3eac"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const database = getDatabase(app);
 
 // Global Variables
 let books = [];
 let isLibrarianLoggedIn = false;
 
 // Fetch books from the JSON file
+// Fetch books from Firebase
 function fetchBooks() {
-  return fetch('books.json')
-    .then(response => response.json())
-    .then(data => {
-      books = data;
-      return books;
-    })
-    .catch(error => console.error('Error fetching books:', error));
-}
+    const booksRef = ref(database, 'books/');
+    return get(booksRef)
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          books = snapshot.val();
+          return books;
+        } else {
+          console.error('No data available');
+        }
+      })
+      .catch((error) => {
+        console.error('Error fetching books:', error);
+      });
+  }
+  
 
 // Populate the genre filter dropdown
 function populateGenreFilter() {
@@ -170,16 +195,28 @@ function displayManageBooks() {
 }
 
 // Toggle book availability
+// Toggle book availability
 function toggleAvailability(bookId) {
-  const book = books.find(b => b.id === bookId);
-  if (book) {
-    book.available = !book.available;
-    const availabilityElement = document.getElementById(`availability-${bookId}`);
-    availabilityElement.textContent = `Available: ${book.available ? 'Yes' : 'No'}`;
-    alert(`Book availability updated to: ${book.available ? 'Available' : 'Not Available'}`);
-    // Note: Changes are not saved permanently without a backend server.
+    const bookIndex = books.findIndex((b) => b.id === bookId);
+    if (bookIndex !== -1) {
+      books[bookIndex].available = !books[bookIndex].available;
+      const availabilityElement = document.getElementById(`availability-${bookId}`);
+      availabilityElement.textContent = `Available: ${books[bookIndex].available ? 'Yes' : 'No'}`;
+  
+      // Update availability in Firebase
+      update(ref(database, `books/${bookIndex}`), {
+        available: books[bookIndex].available,
+      })
+        .then(() => {
+          alert(`Book availability updated to: ${books[bookIndex].available ? 'Available' : 'Not Available'}`);
+        })
+        .catch((error) => {
+          console.error('Error updating availability:', error);
+        });
+    }
   }
-}
+  
+
 
 // Event Listeners and Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -211,3 +248,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 });
+
+// Listen for changes in the books data
+function listenForBookChanges() {
+    const booksRef = ref(database, 'books/');
+    onValue(booksRef, (snapshot) => {
+      if (snapshot.exists()) {
+        books = snapshot.val();
+        const currentPage = window.location.pathname;
+        if (currentPage.endsWith('catalog.html')) {
+          displayBooks(books);
+        } else if (currentPage.endsWith('manage.html')) {
+          displayManageBooks();
+        }
+      }
+    });
+  }
+  
+  fetchBooks().then(() => {
+    populateGenreFilter();
+    displayBooks(books);
+    listenForBookChanges();
+  
+    document.getElementById('search-input').addEventListener('input', filterBooks);
+    document.getElementById('genre-filter').addEventListener('change', filterBooks);
+  });
+  
